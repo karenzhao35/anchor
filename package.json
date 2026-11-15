@@ -1,0 +1,94 @@
+{
+  "name": "explorer",
+  "displayName": "Explorer",
+  "description": "Read code with explanations anchored to real source files.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.145.0"
+  },
+  "categories": [
+    "Education"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "explorer.demo",
+        "title": "Open Demo",
+        "category": "Explorer"
+      },
+      {
+        "command": "explorer.ask",
+        "title": "Ask Question",
+        "category": "Explorer"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "explorer-question-outline",
+          "title": "Code Explorer",
+          "icon": "media/explore.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "explorerPanel",
+          "title": "Code Explanation",
+          "icon": "media/explore.svg"
+        }
+      ]
+    },
+    "views": {
+      "explorer-question-outline": [
+        {
+          "id": "explorer.questionOutline",
+          "name": "Question Outline",
+          "type": "webview"
+        }
+      ],
+      "explorerPanel": [
+        {
+          "id": "explorer.explanation",
+          "name": "Explanation",
+          "type": "webview"
+        }
+      ]
+    },
+    "colors": [
+      {
+        "id": "explorer.anchorHighlight",
+        "description": "Background of the code range being explained by Explorer.",
+        "defaults": {
+          "dark": "#568cff29",
+          "light": "#3974e321",
+          "highContrast": "#568cff52",
+          "highContrastLight": "#3974e340"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.145.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "24.x",
+    "typescript-eslint": "^8.61.1",
+    "eslint": "^10.5.0",
+    "typescript": "^6.0.3",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.0.0"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.0.6"
+  }
+}
