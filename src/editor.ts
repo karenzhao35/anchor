@@ -80,7 +80,7 @@ export class EditorDecorations implements vscode.Disposable {
       backgroundColor: new vscode.ThemeColor('anchor.highlight'),
     });
     this.marker = vscode.window.createTextEditorDecorationType({
-      gutterIconPath: vscode.Uri.joinPath(extensionUri, 'media', 'anchor.svg'),
+      gutterIconPath: vscode.Uri.joinPath(extensionUri, 'media', 'highlight.svg'),
       gutterIconSize: 'contain',
     });
   }
