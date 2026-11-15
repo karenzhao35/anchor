@@ -9,15 +9,17 @@ const skippedFolders = ['node_modules', 'vendor', 'dist', 'build', 'out', 'targe
 const excludedPaths = `{**/.*/**,**/.*,**/{${skippedFolders.join(',')}}/**,**/*.min.js}`;
 const commonWords = new Set('a about an and are as at be by can could did do does file find for from happen happens how i in is it me of on or show so that the this to use was what when where which who why will with would'.split(' '));
 const maxFilesToScan = 750;
-const maxFileBytes = 128 * 1024;
-const maxExcerpts = 8;
-const maxExcerptChars = 2_800;
+const maxFileBytes = 256 * 1024;
+const maxExcerpts = 16;
+const maxExcerptChars = 30_000;
+const maxLinkedFiles = 6;
 
 interface Candidate {
   uri: vscode.Uri;
   path: string;
   score: number;
   active: boolean;
+  text?: string;
 }
 
 export interface SourceExcerpt extends SourceReference {
@@ -98,6 +100,7 @@ async function rankCandidate(uri: vscode.Uri, activeUri: vscode.Uri | undefined,
     uri,
     path,
     active: uri.toString() === activeUri?.toString(),
+    text,
     score: 5 * overlap(terms, path) + 2 * overlap(terms, text),
   };
 }
@@ -135,8 +138,13 @@ function excerptFor(document: vscode.TextDocument, terms: Set<string>): { span: 
     }
   }
 
-  const start = document.lineCount <= 80 ? 0 : Math.max(0, bestIndex - 12);
-  const end = Math.min(document.lineCount, bestIndex + 70);
+  // Send the whole file when it fits the budget so every part of it can be cited.
+  const whole = numberedWindow(document, 0, document.lineCount);
+  if (whole && whole.span.endLine === document.lineCount) {
+    return whole;
+  }
+  const start = Math.max(0, bestIndex - 40);
+  const end = Math.min(document.lineCount, bestIndex + 400);
   const window = numberedWindow(document, start, end);
   if (window && window.span.endLine > bestIndex) {
     return window;
@@ -171,6 +179,50 @@ async function snapshot(candidate: Candidate, terms: Set<string>): Promise<Sourc
   };
 }
 
+/** Extract the stems of local files a source file includes or imports, such as tcp.h → tcp. */
+function linkedStems(text: string): Set<string> {
+  const stems = new Set<string>();
+  const patterns = [/^\s*#\s*include\s*"([^"]+)"/gm, /(?:from|require\(|import)\s*\(?\s*['"](\.[^'"]+)['"]/g];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const name = match[1].split(/[\\/]/).at(-1) ?? '';
+      stems.add(name.replace(/\.[^.]*$/, '').toLowerCase());
+    }
+  }
+  return stems;
+}
+
+/** Add files linked from the top-ranked ones (headers, imports) so the model sees their definitions. */
+function addLinkedCandidates(candidates: Candidate[], uris: vscode.Uri[], open: Map<string, vscode.TextDocument>) {
+  const known = new Set(candidates.map(candidate => candidate.uri.toString()));
+  const top = [...candidates].sort((a, b) => b.score - a.score || Number(b.active) - Number(a.active)).slice(0, 3)
+    .filter(candidate => candidate.score > 0 || candidate.active);
+  const byStem = new Map<string, vscode.Uri[]>();
+  for (const uri of uris) {
+    const stem = (uri.path.split('/').at(-1) ?? '').replace(/\.[^.]*$/, '').toLowerCase();
+    byStem.set(stem, [...(byStem.get(stem) ?? []), uri]);
+  }
+  let added = 0;
+  for (const candidate of top) {
+    const text = open.get(candidate.uri.toString())?.getText() ?? candidate.text;
+    if (text === undefined) {
+      continue;
+    }
+    for (const stem of linkedStems(text)) {
+      for (const uri of byStem.get(stem) ?? []) {
+        const folder = vscode.workspace.getWorkspaceFolder(uri);
+        const path = vscode.workspace.asRelativePath(uri, false);
+        if (!folder || known.has(uri.toString()) || !isSourcePath(path) || added >= maxLinkedFiles) {
+          continue;
+        }
+        known.add(uri.toString());
+        added++;
+        candidates.push({ uri, path, active: false, score: 1 });
+      }
+    }
+  }
+}
+
 /** Find matching workspace files, then snapshot only the most relevant excerpts for the model. */
 export async function discoverSources(question: string, activeUri: vscode.Uri | undefined, token: vscode.CancellationToken): Promise<Map<string, SourceExcerpt>> {
   if (!vscode.workspace.workspaceFolders?.length) {
@@ -187,8 +239,9 @@ export async function discoverSources(question: string, activeUri: vscode.Uri | 
     candidates.push(...batch.filter(candidate => candidate !== undefined));
   }
 
+  addLinkedCandidates(candidates, uris, open);
   candidates.sort((a, b) => b.score - a.score || Number(b.active) - Number(a.active) || a.path.localeCompare(b.path));
-  const relevant = candidates.filter(candidate => candidate.score > 0);
+  const relevant = candidates.filter(candidate => candidate.score > 0 || candidate.active);
   const ranked = relevant.length ? relevant : candidates.filter(candidate => candidate.active || candidates.length <= maxExcerpts);
   const sources = new Map<string, SourceExcerpt>();
   for (const candidate of ranked) {

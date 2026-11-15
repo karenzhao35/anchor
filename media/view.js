@@ -20,6 +20,82 @@ function element(tag, label = '', className = '') {
   return node;
 }
 
+/** Add inline `code` and **bold** from model text as DOM nodes, never as HTML. */
+function appendInline(parent, text) {
+  for (const part of text.split(/(`[^`]+`|\*\*[^*]+\*\*)/)) {
+    if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
+      parent.append(element('code', part.slice(1, -1)));
+    } else if (part.length > 4 && part.startsWith('**') && part.endsWith('**')) {
+      parent.append(element('strong', part.slice(2, -2)));
+    } else if (part) {
+      parent.append(part);
+    }
+  }
+}
+
+/** Render a small Markdown subset (paragraphs, lists, headings, code blocks) into safe DOM nodes. */
+function renderMarkdown(text, className = '') {
+  const root = element('div', '', ('markdown ' + className).trim());
+  let paragraph = [];
+  let list;
+  let code;
+  const flush = () => {
+    if (paragraph.length) {
+      const p = element('p');
+      appendInline(p, paragraph.join(' '));
+      root.append(p);
+      paragraph = [];
+    }
+  };
+  for (const line of text.split('\n')) {
+    if (code) {
+      if (/^\s*```/.test(line)) {
+        root.append(code.node);
+        code = undefined;
+      } else {
+        code.lines.push(line);
+        code.node.firstChild.textContent = code.lines.join('\n');
+      }
+      continue;
+    }
+    const item = /^\s*(?:(\d+)[.)]|[-*•])\s+(.*)$/.exec(line);
+    const heading = /^\s*#{1,6}\s+(.*)$/.exec(line);
+    if (/^\s*```/.test(line)) {
+      flush();
+      list = undefined;
+      code = { lines: [], node: element('pre') };
+      code.node.append(element('code'));
+    } else if (item) {
+      flush();
+      const tag = item[1] ? 'ol' : 'ul';
+      if (!list || list.tagName.toLowerCase() !== tag) {
+        list = element(tag);
+        root.append(list);
+      }
+      const li = element('li');
+      appendInline(li, item[2]);
+      list.append(li);
+    } else if (heading) {
+      flush();
+      list = undefined;
+      root.append(element('h3', heading[1]));
+    } else if (!line.trim()) {
+      flush();
+      list = undefined;
+    } else if (list && /^\s+/.test(line)) {
+      appendInline(list.lastChild, ' ' + line.trim());
+    } else {
+      list = undefined;
+      paragraph.push(line.trim());
+    }
+  }
+  if (code) {
+    root.append(code.node);
+  }
+  flush();
+  return root;
+}
+
 /** Create a button that sends a message to the extension host when clicked. */
 function actionButton(label, message, className, disabled = false) {
   const button = element('button', label, className);
@@ -57,6 +133,9 @@ function renderFile(fileId, steps, activeId, busy) {
   for (const step of steps) {
     const button = actionButton('', { type: 'jump', id: step.id }, 'step', step.stale || busy);
     button.dataset.step = step.id;
+    if (step.parent) {
+      button.classList.add('substep');
+    }
     if (step.id === activeId) {
       button.setAttribute('aria-current', 'location');
     }
@@ -75,15 +154,14 @@ function renderOutline(state) {
   if (!state.question) {
     content.append(
       element('p', 'Start with a question about how your code works.', 'lede'),
-      element('p', 'Explorer links each part of the answer to the source that implements it.', 'muted'),
-      actionButton('Open demo', { type: 'demo' }, 'secondary', busy),
+      element('p', 'Anchor links each part of the answer to the source that implements it.', 'muted'),
     );
   } else {
     const header = element('header');
     header.append(
-      element('div', state.demo ? 'GUIDED DEMO' : 'CURRENT QUESTION', 'eyebrow'),
+      element('div', 'CURRENT QUESTION', 'eyebrow'),
       element('h1', state.question),
-      element('p', state.overview, 'lede'),
+      renderMarkdown(state.overview, 'lede'),
     );
     content.append(header);
     for (const [fileId, steps] of groupByFile(state.steps)) {
@@ -92,9 +170,7 @@ function renderOutline(state) {
   }
 
   actions.append(actionButton('+  Ask Question', { type: 'ask' }, 'primary', busy));
-  if (state.demo) {
-    actions.append(actionButton('Restart demo', { type: 'demo' }, 'secondary', busy));
-  }
+  actions.append(actionButton('Model: ' + (state.model || 'none') + ' (change)', { type: 'model' }, 'secondary', busy));
 }
 
 /** Keep an unfinished live follow-up attached to its step across view updates. */
@@ -138,12 +214,9 @@ function renderExplanation(state) {
   const busy = Boolean(state.busy);
   if (!step) {
     const hint = state.question
-      ? 'Choose a function in Explorer or move the cursor to a marked region in the editor.'
-      : 'Ask a question or open the demo to see explanations alongside the actual source.';
+      ? 'Choose a function in Anchor or move the cursor to a marked region in the editor.'
+      : 'Ask a question to see explanations alongside the actual source.';
     content.append(element('h1', 'Explanation'), element('p', hint, 'lede'));
-    if (!state.question) {
-      content.append(actionButton('Open demo', { type: 'demo' }, 'secondary', busy));
-    }
     return;
   }
 
@@ -151,25 +224,17 @@ function renderExplanation(state) {
     ? `line ${step.startLine}`
     : `lines ${step.startLine}–${step.endLine}`;
   content.append(
-    element('div', `${step.fileName} · ${lines}`, 'location'),
+    element('div', `${step.fileName} · ${lines}${step.parent ? ' · part of ' + step.parent : ''}`, 'location'),
     element('h1', step.symbol),
-    element('p', step.explanation, 'explanation'),
+    renderMarkdown(step.explanation, 'explanation'),
   );
   for (const { question, answer } of step.followups) {
     const entry = element('section', '', 'followup');
-    entry.append(element('h2', question), element('p', answer));
+    entry.append(element('h2', question), renderMarkdown(answer));
     content.append(entry);
   }
 
-  if (!state.demo) {
-    actions.append(renderFollowupForm(step, busy));
-  } else if (step.symbol === 'resetTime()' && step.followups.length === 0) {
-    const message = { type: 'followup', id: step.id, question: state.demoFollowup };
-    actions.append(
-      element('div', 'ASK MORE ABOUT THIS', 'eyebrow'),
-      actionButton(state.demoFollowup, message, 'secondary', busy),
-    );
-  }
+  actions.append(renderFollowupForm(step, busy));
 }
 
 /** Restore focus and the input selection after the view replaces its DOM nodes. */

@@ -44,7 +44,7 @@ function validateStep(value: unknown, sources: ReadonlyMap<string, SourceReferen
     return;
   }
   if (!Number.isInteger(startLine) || !Number.isInteger(endLine) ||
-      startLine < 1 || endLine < startLine || endLine > file.lineCount || endLine - startLine > 49) {
+      startLine < 1 || endLine < startLine || endLine > file.lineCount || endLine - startLine > 299) {
     return;
   }
 
@@ -56,7 +56,8 @@ function validateStep(value: unknown, sources: ReadonlyMap<string, SourceReferen
 
   const symbol = field(value.symbol, 100);
   const role = field(value.role, 140);
-  const explanation = field(value.explanation, 1000);
+  const parent = field(value.parent, 100);
+  const explanation = field(value.explanation, 4000);
   if (!symbol || !role || !explanation) {
     return;
   }
@@ -70,6 +71,7 @@ function validateStep(value: unknown, sources: ReadonlyMap<string, SourceReferen
     endLine,
     symbol,
     role,
+    ...(parent && { parent }),
     explanation,
     followups: [],
   };
@@ -78,7 +80,7 @@ function validateStep(value: unknown, sources: ReadonlyMap<string, SourceReferen
 /** Keep verified, distinct citations in the order the model proposed them. */
 export function parseWalkthrough(text: string, sources: ReadonlyMap<string, SourceReference>) {
   const data = readResponse(text);
-  const proposals: unknown[] = Array.isArray(data.steps) ? data.steps.slice(0, 12) : [];
+  const proposals: unknown[] = Array.isArray(data.steps) ? data.steps.slice(0, 40) : [];
   const accepted = new Map<string, Step>();
   for (const proposal of proposals) {
     const step = validateStep(proposal, sources);
@@ -91,7 +93,7 @@ export function parseWalkthrough(text: string, sources: ReadonlyMap<string, Sour
     throw new Error('The model did not find a valid code location in the included files. Try naming a function or asking a narrower question.');
   }
   return {
-    overview: field(data.overview, 440),
+    overview: field(data.overview, 2500),
     steps: [...accepted.values()],
     omitted: proposals.length - accepted.size,
   };

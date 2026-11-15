@@ -1,6 +1,6 @@
 {
-  "name": "explorer",
-  "displayName": "Explorer",
+  "name": "anchor",
+  "displayName": "Anchor",
   "description": "Read code with explanations anchored to real source files.",
   "version": "0.0.1",
   "engines": {
@@ -9,48 +9,48 @@
   "categories": [
     "Education"
   ],
-  "activationEvents": [],
+  "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "explorer.demo",
-        "title": "Open Demo",
-        "category": "Explorer"
+        "command": "anchor.selectModel",
+        "title": "Select Model",
+        "category": "Anchor"
       },
       {
-        "command": "explorer.ask",
+        "command": "anchor.ask",
         "title": "Ask Question",
-        "category": "Explorer"
+        "category": "Anchor"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "explorer-question-outline",
-          "title": "Code Explorer",
+          "id": "anchor-question-outline",
+          "title": "Anchor",
           "icon": "media/explore.svg"
         }
       ],
       "panel": [
         {
-          "id": "explorerPanel",
+          "id": "anchorPanel",
           "title": "Code Explanation",
           "icon": "media/explore.svg"
         }
       ]
     },
     "views": {
-      "explorer-question-outline": [
+      "anchor-question-outline": [
         {
-          "id": "explorer.questionOutline",
+          "id": "anchor.questionOutline",
           "name": "Question Outline",
           "type": "webview"
         }
       ],
-      "explorerPanel": [
+      "anchorPanel": [
         {
-          "id": "explorer.explanation",
+          "id": "anchor.explanation",
           "name": "Explanation",
           "type": "webview"
         }
@@ -58,8 +58,8 @@
     },
     "colors": [
       {
-        "id": "explorer.anchorHighlight",
-        "description": "Background of the code range being explained by Explorer.",
+        "id": "anchor.highlight",
+        "description": "Background of the code range being explained by Anchor.",
         "defaults": {
           "dark": "#568cff29",
           "light": "#3974e321",

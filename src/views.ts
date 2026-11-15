@@ -3,22 +3,21 @@ import * as vscode from 'vscode';
 import type { DisplayStep } from './walkthrough';
 
 export const VIEW_IDS = {
-  outline: 'explorer.questionOutline',
-  explanation: 'explorer.explanation',
+  outline: 'anchor.questionOutline',
+  explanation: 'anchor.explanation',
 };
 
 type ViewKind = keyof typeof VIEW_IDS;
 
 export type ViewAction =
-  | { type: 'ready' | 'demo' | 'ask' }
+  | { type: 'ready' | 'ask' | 'model' }
   | { type: 'jump'; id: string }
   | { type: 'followup'; id: string; question: string };
 
 export interface ViewState {
   question?: string;
   overview?: string;
-  demo: boolean;
-  demoFollowup: string;
+  model: string;
   steps: DisplayStep[];
   activeId?: string;
   busy: string;
@@ -40,7 +39,7 @@ function viewHtml(webview: vscode.Webview, media: vscode.Uri, kind: ViewKind): s
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'">
   <link rel="stylesheet" href="${assetUrl(webview, media, 'view.css')}">
-  <title>Explorer</title>
+  <title>Anchor</title>
 </head>
 <body data-kind="${kind}">
   <main id="content"></main>
@@ -56,7 +55,7 @@ function readAction(kind: ViewKind, value: unknown): ViewAction | undefined {
     return;
   }
   const { type, id, question } = value as Record<string, unknown>;
-  if (type === 'ready' || type === 'demo' || type === 'ask') {
+  if (type === 'ready' || type === 'ask' || type === 'model') {
     return { type };
   }
   if (type === 'jump' && kind === 'outline' && typeof id === 'string') {

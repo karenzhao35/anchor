@@ -77,7 +77,7 @@ export class EditorDecorations implements vscode.Disposable {
   constructor(extensionUri: vscode.Uri) {
     this.highlight = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
-      backgroundColor: new vscode.ThemeColor('explorer.anchorHighlight'),
+      backgroundColor: new vscode.ThemeColor('anchor.highlight'),
     });
     this.marker = vscode.window.createTextEditorDecorationType({
       gutterIconPath: vscode.Uri.joinPath(extensionUri, 'media', 'anchor.svg'),
@@ -95,7 +95,7 @@ export class EditorDecorations implements vscode.Disposable {
       editor.setDecorations(this.highlight, active ? [sourceRange(document, active)] : []);
       editor.setDecorations(this.marker, valid.map(step => ({
         range: document.lineAt(step.startLine - 1).range,
-        hoverMessage: 'Explorer: ' + step.role,
+        hoverMessage: 'Anchor: ' + step.role,
       })));
     }
   }

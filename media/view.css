@@ -59,8 +59,19 @@ button:focus-visible, input:focus-visible, summary:focus-visible {
   color: var(--vscode-list-inactiveSelectionForeground);
   border-inline-start-color: var(--vscode-focusBorder);
 }
+.step.substep { padding-inline-start: 30px; font-size: 0.95em; }
 .role { display: block; font-size: 11px; margin-top: 3px; }
-.explanation, .followup, [data-kind="explanation"] form { max-width: 76ch; }
+code { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.95em; }
+.markdown p, .markdown ul, .markdown ol { margin: 0 0 9px; }
+.markdown ul, .markdown ol { padding-inline-start: 22px; }
+.markdown li { margin-bottom: 4px; }
+.markdown h3 { font-size: 1em; margin: 12px 0 5px; }
+.markdown pre {
+  margin: 0 0 10px; padding: 8px 10px; overflow-x: auto; border-radius: 4px;
+  background: var(--vscode-textCodeBlock-background, var(--vscode-editor-background));
+}
+.markdown :not(pre) > code { padding: 0 3px; border-radius: 3px; background: var(--vscode-textCodeBlock-background); }
+.markdown, .followup, [data-kind="explanation"] form { max-width: 76ch; }
 .followup {
   border-inline-start: 2px solid var(--vscode-panel-border, var(--vscode-focusBorder));
   padding-inline-start: 10px; margin-top: 13px;

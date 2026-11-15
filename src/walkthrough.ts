@@ -16,6 +16,8 @@ export interface DisplayStep extends LineSpan {
   fileName: string;
   symbol: string;
   role: string;
+  /** Symbol of the enclosing step when this step is one phase of a longer function. */
+  parent?: string;
   explanation: string;
   followups: Followup[];
   stale?: boolean;
@@ -32,7 +34,6 @@ export interface Walkthrough {
   question: string;
   overview: string;
   steps: Step[];
-  demo?: boolean;
 }
 
 /** The snapshot metadata needed to verify a citation from the model. */

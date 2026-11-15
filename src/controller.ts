@@ -1,6 +1,5 @@
 import { basename } from 'node:path/posix';
 import * as vscode from 'vscode';
-import { DEMO_FOLLOWUP, getDemoFollowup, loadDemo, openDemoTabs } from './demo';
 import { EditorDecorations, isStale, openCurrentSource, revealSource, stepAtCursor, updateStaleness } from './editor';
 import { field } from './grounding';
 import { answerFollowup, buildWalkthrough, QUESTION_LIMIT } from './model';
@@ -15,6 +14,7 @@ function displayStep(step: Step, fileId: string): DisplayStep {
     fileName: basename(vscode.Uri.parse(step.uri).path),
     symbol: step.symbol,
     role: step.role,
+    parent: step.parent,
     startLine: step.startLine,
     endLine: step.endLine,
     explanation: step.explanation,
@@ -41,6 +41,7 @@ export class WalkthroughController implements vscode.Disposable {
   private activeId?: string;
   private busy = '';
   private notice = '';
+  private modelName = '';
   private request?: vscode.CancellationTokenSource;
   private jumping = false;
 
@@ -48,6 +49,12 @@ export class WalkthroughController implements vscode.Disposable {
   constructor(private readonly extensionUri: vscode.Uri) {
     this.views = new WalkthroughViews(extensionUri);
     this.decorations = new EditorDecorations(extensionUri);
+  }
+
+  /** Show the active model's name in the outline view. */
+  setModel(name: string): void {
+    this.modelName = name;
+    this.refresh();
   }
 
   /** Cancel outstanding work and remove the editor decorations when the extension unloads. */
@@ -62,11 +69,10 @@ export class WalkthroughController implements vscode.Disposable {
     this.views.publish({
       question: this.walkthrough?.question,
       overview: this.walkthrough?.overview,
-      demo: Boolean(this.walkthrough?.demo),
-      demoFollowup: DEMO_FOLLOWUP,
       steps: displaySteps(steps),
       activeId: this.activeId,
       busy: this.busy,
+      model: this.modelName,
       notice: this.notice,
     });
     this.decorations.update(steps, this.activeId);
@@ -119,18 +125,26 @@ export class WalkthroughController implements vscode.Disposable {
     }
   }
 
-  /** Replace the current walkthrough with the offline example and open its first step. */
-  async openDemo(): Promise<void> {
+  /** Prompt for a question, build a verified walkthrough, and open its first step. */
+  async ask(): Promise<void> {
     if (this.busy || this.jumping) {
       return;
     }
-    await this.run('Opening demo…', async () => {
-      const demo = await loadDemo(this.extensionUri);
-      await openDemoTabs(demo);
-      this.walkthrough = demo;
+    const value = await vscode.window.showInputBox({
+      prompt: 'Ask how something in your code works',
+      placeHolder: 'What happens when the sender times out?',
+      validateInput: text => text.length > QUESTION_LIMIT ? `Keep the question under ${QUESTION_LIMIT} characters.` : undefined,
+    });
+    const question = field(value, QUESTION_LIMIT);
+    if (!question) {
+      return;
+    }
+
+    await this.run('Finding relevant code…', async request => {
+      const { overview, steps, omitted } = await buildWalkthrough(question, vscode.window.activeTextEditor?.document.uri, request);
+      this.walkthrough = { question, overview, steps };
       this.activeId = undefined;
-      this.refresh();
-      await this.views.focus('outline');
+      this.notice = omitted ? `${omitted} proposed step(s) were dropped because their line citations could not be verified.` : '';
     });
     const firstStep = this.walkthrough?.steps[0];
     if (firstStep) {
@@ -138,40 +152,7 @@ export class WalkthroughController implements vscode.Disposable {
     }
   }
 
-  /** Ask a question, search the workspace, and reveal the first relevant source location. */
-  async ask(): Promise<void> {
-    if (this.busy) {
-      return;
-    }
-
-    const editor = vscode.window.activeTextEditor;
-    const question = (await vscode.window.showInputBox({
-      title: 'Explorer: Ask Question',
-      prompt: 'Explorer searches this workspace and sends relevant code excerpts to Copilot.',
-      placeHolder: 'How does this command reset the clock?',
-      ignoreFocusOut: true,
-      validateInput: value => value.length > QUESTION_LIMIT ? 'Use 600 characters or fewer.' : undefined,
-    }))?.trim();
-    if (!question || this.busy) {
-      return;
-    }
-
-    await this.run('Finding source and building walkthrough…', async request => {
-      const { steps, overview, omitted } = await buildWalkthrough(question, editor?.document.uri, request);
-      this.walkthrough = { question, steps, overview };
-      if (omitted > 0) {
-        this.notice = 'Some references could not be verified and were hidden.';
-      }
-      this.syncCursor();
-      await this.views.focus('outline');
-    });
-    const firstStep = this.walkthrough?.steps[0];
-    if (firstStep) {
-      await this.jump(firstStep.id);
-    }
-  }
-
-  /** Add an answer to the selected code location using the demo or live model. */
+  /** Add an answer to the selected code location using the live model. */
   async followup(id: string, value: string): Promise<void> {
     const question = field(value, QUESTION_LIMIT);
     const walkthrough = this.walkthrough;
@@ -181,15 +162,6 @@ export class WalkthroughController implements vscode.Disposable {
     }
     if (step.followups.length >= 10) {
       throw new Error('This code location already has ten follow-ups. Start a fresh walkthrough to ask more.');
-    }
-
-    if (walkthrough.demo) {
-      const answer = getDemoFollowup(step, question);
-      if (answer) {
-        step.followups.push(answer);
-        this.refresh();
-      }
-      return;
     }
 
     await this.run(`Answering about ${step.symbol}…`, async request => {
@@ -202,9 +174,9 @@ export class WalkthroughController implements vscode.Disposable {
     try {
       await action();
     } catch (error) {
-      this.notice = error instanceof Error ? error.message : 'Explorer could not complete that action.';
+      this.notice = error instanceof Error ? error.message : 'Anchor could not complete that action.';
       this.refresh();
-      void vscode.window.showErrorMessage('Explorer: ' + this.notice);
+      void vscode.window.showErrorMessage('Anchor: ' + this.notice);
     }
   }
 
