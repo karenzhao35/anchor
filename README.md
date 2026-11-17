@@ -3,7 +3,6 @@
 Anchor connects questions about program behavior to the code that implements it. The Anchor sidebar groups source locations by file. The editor highlights the selected range, and the Code Explanation panel describes why it matters.
 
 ## Try it
-
 1. Open this folder in desktop VS Code. Run `npm ci` if the development dependencies aren't installed, then press **F5**.
 2. In the Extension Development Host window, open a project, run **Anchor: Ask Question** from the Command Palette, and type a question. This needs GitHub Copilot.
 

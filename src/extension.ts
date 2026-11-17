@@ -10,7 +10,7 @@ export function activate(context: vscode.ExtensionContext): void {
   setPreferredModel(context.globalState.get<string>(modelKey));
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
   status.command = 'anchor.selectModel';
-  status.tooltip = 'Choose the Copilot model Anchor uses';
+  status.tooltip = 'Choose the model Anchor uses (Copilot or your own key)';
   const showModel = async () => {
     const name = (await currentModel())?.name ?? 'no model';
     controller.setModel(name);
@@ -28,15 +28,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('anchor.selectModel', () => controller.safely(async () => {
       const models = await listModels();
       if (!models.length) {
-        throw new Error('No Copilot language models are available. Set up Copilot in VS Code and sign in.');
+        throw new Error('No language models are available. Sign in to Copilot or add a model under Manage Models.');
       }
       const active = (await currentModel())?.id;
       const picked = await vscode.window.showQuickPick(models.map(model => ({
         label: model.name,
-        description: model.id === active ? 'current' : model.family,
+        description: model.id === active ? `current · ${model.vendor}` : `${model.vendor} · ${model.family}`,
         detail: `${model.id} · up to ${model.maxInputTokens.toLocaleString()} input tokens`,
         id: model.id,
-      })), { title: 'Anchor: Select Model', placeHolder: 'Choose the Copilot model for questions and follow-ups' });
+      })), { title: 'Anchor: Select Model', placeHolder: 'Choose the model for questions and follow-ups' });
       if (picked) {
         setPreferredModel(picked.id);
         await context.globalState.update(modelKey, picked.id);
