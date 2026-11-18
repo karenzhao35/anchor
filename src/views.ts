@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
-import type { DisplayStep } from './walkthrough';
+import type { DisplayStep, Stage } from './walkthrough';
 
 export const VIEW_IDS = {
   outline: 'anchor.questionOutline',
@@ -10,18 +10,22 @@ export const VIEW_IDS = {
 type ViewKind = keyof typeof VIEW_IDS;
 
 export type ViewAction =
-  | { type: 'ready' | 'ask' | 'model' }
+  | { type: 'ready' | 'ask' | 'model' | 'copy' | 'back' | 'forward' }
   | { type: 'jump'; id: string }
   | { type: 'followup'; id: string; question: string };
 
 export interface ViewState {
   question?: string;
-  overview?: string;
+  answer?: string;
+  stages: Stage[];
   model: string;
   steps: DisplayStep[];
   activeId?: string;
   busy: string;
   notice: string;
+  /** Index of the shown question in this session's history, or -1 before the first question. */
+  position: number;
+  total: number;
 }
 
 /** Resolve an asset URL that the webview sandbox can read. */
@@ -55,7 +59,7 @@ function readAction(kind: ViewKind, value: unknown): ViewAction | undefined {
     return;
   }
   const { type, id, question } = value as Record<string, unknown>;
-  if (type === 'ready' || type === 'ask' || type === 'model') {
+  if (type === 'ready' || type === 'ask' || type === 'model' || type === 'copy' || type === 'back' || type === 'forward') {
     return { type };
   }
   if (type === 'jump' && kind === 'outline' && typeof id === 'string') {

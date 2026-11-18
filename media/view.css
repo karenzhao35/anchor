@@ -30,7 +30,7 @@ header { padding-bottom: 12px; }
 button, input { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: default; opacity: .6; }
-button:focus-visible, input:focus-visible, summary:focus-visible {
+button:focus-visible, input:focus-visible {
   outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px;
 }
 .primary, .secondary {
@@ -42,11 +42,17 @@ button:focus-visible, input:focus-visible, summary:focus-visible {
 .secondary { color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground); }
 .secondary:hover:enabled { background: var(--vscode-button-secondaryHoverBackground); }
 [data-kind="outline"] footer { display: grid; gap: 6px; }
-.file { margin-bottom: 5px; }
-.file summary {
-  cursor: pointer; padding: 5px 1px; font-weight: 600;
-  overflow-wrap: anywhere;
+.stage { margin-bottom: 12px; }
+.stage h2 { margin: 4px 0 4px; }
+.stage-summary p { font-size: 0.95em; margin-bottom: 4px; }
+.history { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.history .eyebrow { margin: 0 auto 0 0; }
+.history-button {
+  min-width: 22px; padding: 0 6px; border: 0; border-radius: 3px;
+  background: transparent; color: var(--vscode-foreground); font-size: 15px; line-height: 20px;
 }
+.history-button:hover:enabled { background: var(--vscode-toolbar-hoverBackground); }
+header .answer { padding-bottom: 6px; border-bottom: 1px solid var(--vscode-panel-border, transparent); }
 .step {
   display: block; width: 100%; text-align: left;
   padding: 6px 8px 6px 16px; border: 0; border-inline-start: 2px solid transparent;
@@ -60,7 +66,13 @@ button:focus-visible, input:focus-visible, summary:focus-visible {
   border-inline-start-color: var(--vscode-focusBorder);
 }
 .step.substep { padding-inline-start: 30px; font-size: 0.95em; }
+.step-title { display: flex; gap: 6px; align-items: baseline; }
+.step-number { color: var(--vscode-descriptionForeground); font-size: 11px; min-width: 1.6em; }
 .role { display: block; font-size: 11px; margin-top: 3px; }
+.file-tag {
+  display: block; font-size: 10.5px; margin-top: 2px;
+  font-family: var(--vscode-editor-font-family); color: var(--vscode-descriptionForeground); opacity: .85;
+}
 code { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.95em; }
 .markdown p, .markdown ul, .markdown ol { margin: 0 0 9px; }
 .markdown ul, .markdown ol { padding-inline-start: 22px; }

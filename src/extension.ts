@@ -44,6 +44,9 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     })),
     vscode.commands.registerCommand('anchor.ask', () => controller.safely(() => controller.ask())),
+    vscode.commands.registerCommand('anchor.back', () => controller.safely(() => controller.navigate(-1))),
+    vscode.commands.registerCommand('anchor.forward', () => controller.safely(() => controller.navigate(1))),
+    vscode.commands.registerCommand('anchor.copy', () => controller.safely(() => controller.copy())),
     vscode.window.registerWebviewViewProvider(VIEW_IDS.outline, {
       resolveWebviewView: view => controller.views.attach('outline', view, dispatch),
     }),
@@ -76,6 +79,15 @@ function handleViewAction(controller: WalkthroughController, action: ViewAction)
       break;
     case 'ask':
       void controller.safely(() => controller.ask());
+      break;
+    case 'copy':
+      void controller.safely(() => controller.copy());
+      break;
+    case 'back':
+      void controller.safely(() => controller.navigate(-1));
+      break;
+    case 'forward':
+      void controller.safely(() => controller.navigate(1));
       break;
     case 'jump':
       void controller.safely(() => controller.jump(action.id));

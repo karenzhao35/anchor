@@ -1,10 +1,14 @@
 import { basename } from 'node:path/posix';
 import * as vscode from 'vscode';
 import { EditorDecorations, isStale, openCurrentSource, revealSource, stepAtCursor, updateStaleness } from './editor';
+import { walkthroughMarkdown } from './exportMarkdown';
 import { field } from './grounding';
 import { answerFollowup, buildWalkthrough, QUESTION_LIMIT } from './model';
 import { WalkthroughViews } from './views';
 import type { DisplayStep, Step, Walkthrough } from './walkthrough';
+
+/** How many questions one window remembers before dropping the oldest. */
+const HISTORY_LIMIT = 30;
 
 /** Copy the information a webview needs, leaving file URIs and hashes in the host. */
 function displayStep(step: Step, fileId: string): DisplayStep {
@@ -15,6 +19,7 @@ function displayStep(step: Step, fileId: string): DisplayStep {
     symbol: step.symbol,
     role: step.role,
     parent: step.parent,
+    stage: step.stage,
     startLine: step.startLine,
     endLine: step.endLine,
     explanation: step.explanation,
@@ -37,7 +42,9 @@ function displaySteps(steps: Step[]): DisplayStep[] {
 export class WalkthroughController implements vscode.Disposable {
   readonly views: WalkthroughViews;
   private readonly decorations: EditorDecorations;
-  private walkthrough?: Walkthrough;
+  /** Questions asked in this window, oldest first; kept in memory only, so a reload clears them. */
+  private readonly history: Walkthrough[] = [];
+  private position = -1;
   private activeId?: string;
   private busy = '';
   private notice = '';
@@ -49,6 +56,11 @@ export class WalkthroughController implements vscode.Disposable {
   constructor(private readonly extensionUri: vscode.Uri) {
     this.views = new WalkthroughViews(extensionUri);
     this.decorations = new EditorDecorations(extensionUri);
+  }
+
+  /** The walkthrough the user is currently viewing in the history. */
+  private get walkthrough(): Walkthrough | undefined {
+    return this.history[this.position];
   }
 
   /** Show the active model's name in the outline view. */
@@ -68,14 +80,20 @@ export class WalkthroughController implements vscode.Disposable {
     const steps = this.walkthrough?.steps ?? [];
     this.views.publish({
       question: this.walkthrough?.question,
-      overview: this.walkthrough?.overview,
+      answer: this.walkthrough?.answer,
+      stages: this.walkthrough?.stages ?? [],
       steps: displaySteps(steps),
       activeId: this.activeId,
       busy: this.busy,
       model: this.modelName,
       notice: this.notice,
+      position: this.position,
+      total: this.history.length,
     });
     this.decorations.update(steps, this.activeId);
+    void vscode.commands.executeCommand('setContext', 'anchor.hasWalkthrough', Boolean(this.walkthrough));
+    void vscode.commands.executeCommand('setContext', 'anchor.canGoBack', this.position > 0);
+    void vscode.commands.executeCommand('setContext', 'anchor.canGoForward', this.position < this.history.length - 1);
   }
 
   /** Update the selected step when the user moves the cursor or changes editors. */
@@ -90,10 +108,16 @@ export class WalkthroughController implements vscode.Disposable {
 
   /** Recheck citations after actual edits to a document in the walkthrough. */
   sourceChanged(event: vscode.TextDocumentChangeEvent): void {
-    if (!event.contentChanges.length || !this.walkthrough) {
+    if (!event.contentChanges.length) {
       return;
     }
-    if (updateStaleness(this.walkthrough.steps, event.document)) {
+    // Check earlier questions too, so their steps are still marked stale after the file closes.
+    let changed = false;
+    for (const walkthrough of this.history) {
+      const related = updateStaleness(walkthrough.steps, event.document);
+      changed ||= related && walkthrough === this.walkthrough;
+    }
+    if (changed) {
       this.syncCursor();
     }
   }
@@ -141,14 +165,36 @@ export class WalkthroughController implements vscode.Disposable {
     }
 
     await this.run('Finding relevant code…', async request => {
-      const { overview, steps, omitted } = await buildWalkthrough(question, vscode.window.activeTextEditor?.document.uri, request);
-      this.walkthrough = { question, overview, steps };
+      const { answer, stages, steps, omitted } = await buildWalkthrough(question, vscode.window.activeTextEditor?.document.uri, request);
+      // New questions go at the end, so asking after going back never discards later ones.
+      this.history.push({ question, answer, stages, steps });
+      if (this.history.length > HISTORY_LIMIT) {
+        this.history.shift();
+      }
+      this.position = this.history.length - 1;
       this.activeId = undefined;
       this.notice = omitted ? `${omitted} proposed step(s) were dropped because their line citations could not be verified.` : '';
     });
     const firstStep = this.walkthrough?.steps[0];
     if (firstStep) {
       await this.jump(firstStep.id);
+    }
+  }
+
+  /** Move back (-1) or forward (+1) through this session's questions and open the first current step. */
+  async navigate(offset: -1 | 1): Promise<void> {
+    const target = this.position + offset;
+    if (this.busy || this.jumping || target < 0 || target >= this.history.length) {
+      return;
+    }
+    this.position = target;
+    this.activeId = undefined;
+    this.notice = '';
+    const firstStep = this.history[target].steps.find(step => !isStale(step));
+    if (firstStep) {
+      await this.jump(firstStep.id);
+    } else {
+      this.syncCursor();
     }
   }
 
@@ -167,6 +213,15 @@ export class WalkthroughController implements vscode.Disposable {
     await this.run(`Answering about ${step.symbol}…`, async request => {
       step.followups.push(await answerFollowup(walkthrough, step, question, request));
     });
+  }
+
+  /** Copy the answer, step explanations and follow-ups to the clipboard as Markdown. */
+  async copy(): Promise<void> {
+    if (!this.walkthrough) {
+      throw new Error('Ask a question before copying a response.');
+    }
+    await vscode.env.clipboard.writeText(walkthroughMarkdown(this.walkthrough));
+    vscode.window.setStatusBarMessage('$(check) Anchor: response copied as Markdown', 3000);
   }
 
   /** Report errors consistently for commands and messages from the webviews. */

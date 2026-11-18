@@ -42,6 +42,24 @@ suite('Walkthrough grounding', () => {
     assert.equal(result.steps[0].endLine, 14);
   });
 
+  test('keeps stage order, groups steps by stage and drops stages without verified steps', () => {
+    const guard = { ...reference, startLine: 12, endLine: 12, symbol: 'Guard' };
+    const response = {
+      answer: 'Resetting clears the timer.',
+      stages: [
+        { title: 'Unverifiable', steps: [{ ...reference, source: 'F2' }] },
+        { title: 'Check', summary: 'Guards the reset.', steps: [guard] },
+        { title: 'Clear', steps: [reference] },
+      ],
+    };
+    const { answer, stages, steps, omitted } = parseWalkthrough(JSON.stringify(response), sources);
+
+    assert.equal(answer, 'Resetting clears the timer.');
+    assert.deepEqual(stages, [{ title: 'Check', summary: 'Guards the reset.' }, { title: 'Clear', summary: '' }]);
+    assert.deepEqual(steps.map(step => [step.symbol, step.stage]), [['Guard', 0], ['resetTime()', 1]]);
+    assert.equal(omitted, 1);
+  });
+
   test('chooses the tightest current range under the cursor', () => {
     const guard = { ...reference, startLine: 12, endLine: 12, symbol: 'Guard' };
     const { steps } = parseWalkthrough(JSON.stringify({ steps: [reference, guard] }), sources);

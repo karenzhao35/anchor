@@ -16,8 +16,10 @@ export interface DisplayStep extends LineSpan {
   fileName: string;
   symbol: string;
   role: string;
-  /** Symbol of the enclosing step when this step is one phase of a longer function. */
+  /** Symbol of the enclosing function when this step cites only part of it. */
   parent?: string;
+  /** Index into the walkthrough's stages; absent when the model returned no stages. */
+  stage?: number;
   explanation: string;
   followups: Followup[];
   stale?: boolean;
@@ -30,9 +32,17 @@ export interface Step extends Omit<DisplayStep, 'fileId' | 'fileName'> {
   digest: string;
 }
 
+/** One stage of the answer's flow, in plain language, with its steps attached by index. */
+export interface Stage {
+  title: string;
+  summary: string;
+}
+
 export interface Walkthrough {
   question: string;
-  overview: string;
+  /** Plain-language answer to the question, shown before any code. */
+  answer: string;
+  stages: Stage[];
   steps: Step[];
 }
 

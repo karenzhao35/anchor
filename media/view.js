@@ -3,7 +3,6 @@ const vscode = acquireVsCodeApi();
 const content = document.querySelector('#content');
 const actions = document.querySelector('#actions');
 const kind = document.body.dataset.kind;
-const foldedFiles = new Set();
 const followupDrafts = new Map();
 let previousState = '';
 let previousQuestion;
@@ -105,47 +104,70 @@ function actionButton(label, message, className, disabled = false) {
   return button;
 }
 
-/** Group steps by source file, preserving their walkthrough order. */
-function groupByFile(steps) {
-  const groups = new Map();
+/** Group consecutive steps by stage, preserving walkthrough order. */
+function groupByStage(steps) {
+  const groups = [];
   for (const step of steps) {
-    if (!groups.has(step.fileId)) {
-      groups.set(step.fileId, []);
+    const last = groups.at(-1);
+    if (last && last.stage === step.stage) {
+      last.steps.push(step);
+    } else {
+      groups.push({ stage: step.stage, steps: [step] });
     }
-    groups.get(step.fileId).push(step);
   }
   return groups;
 }
 
-/** Render a collapsible file section with buttons that jump to its source. */
-function renderFile(fileId, steps, activeId, busy) {
-  const group = element('details', '', 'file');
-  group.open = !foldedFiles.has(fileId) || steps.some(step => step.id === activeId);
-  group.append(element('summary', steps[0].fileName));
-  group.addEventListener('toggle', () => {
-    if (group.open) {
-      foldedFiles.delete(fileId);
-    } else {
-      foldedFiles.add(fileId);
-    }
-  });
-
-  for (const step of steps) {
-    const button = actionButton('', { type: 'jump', id: step.id }, 'step', step.stale || busy);
-    button.dataset.step = step.id;
-    if (step.parent) {
-      button.classList.add('substep');
-    }
-    if (step.id === activeId) {
-      button.setAttribute('aria-current', 'location');
-    }
-    button.append(
-      element('strong', step.symbol),
-      element('span', step.stale ? 'Source changed · ask again' : step.role, 'role'),
-    );
-    group.append(button);
+/** Render one step as a button that jumps to its source, numbered in walkthrough order. */
+function renderStep(step, number, activeId, busy) {
+  const button = actionButton('', { type: 'jump', id: step.id }, 'step', step.stale || busy);
+  button.dataset.step = step.id;
+  if (step.parent) {
+    button.classList.add('substep');
   }
-  return group;
+  if (step.id === activeId) {
+    button.setAttribute('aria-current', 'location');
+  }
+  const title = element('span', '', 'step-title');
+  title.append(element('span', number + '.', 'step-number'), element('strong', step.symbol));
+  button.append(
+    title,
+    element('span', step.stale ? 'Source changed · ask again' : step.role, 'role'),
+    element('span', step.fileName + ' · L' + step.startLine + (step.endLine > step.startLine ? '–' + step.endLine : ''), 'file-tag'),
+  );
+  return button;
+}
+
+/** Render a stage heading and summary followed by its steps. */
+function renderStage(stage, index, steps, firstNumber, activeId, busy) {
+  const section = element('section', '', 'stage');
+  if (stage) {
+    section.append(element('h2', (index + 1) + '. ' + stage.title));
+    if (stage.summary) {
+      section.append(renderMarkdown(stage.summary, 'muted stage-summary'));
+    }
+  }
+  steps.forEach((step, offset) => section.append(renderStep(step, firstNumber + offset, activeId, busy)));
+  return section;
+}
+
+/** Show the question label with back/forward controls once this session has more than one question. */
+function renderHistoryNav(state, busy) {
+  if (state.total < 2) {
+    return element('div', 'CURRENT QUESTION', 'eyebrow');
+  }
+  const nav = element('nav', '', 'history');
+  nav.setAttribute('aria-label', 'Question history');
+  const back = actionButton('‹', { type: 'back' }, 'history-button', busy || state.position <= 0);
+  back.title = back.ariaLabel = 'Previous question';
+  const forward = actionButton('›', { type: 'forward' }, 'history-button', busy || state.position >= state.total - 1);
+  forward.title = forward.ariaLabel = 'Next question';
+  nav.append(
+    element('span', 'QUESTION ' + (state.position + 1) + ' OF ' + state.total, 'eyebrow'),
+    back,
+    forward,
+  );
+  return nav;
 }
 
 /** Render the question and source list, or the welcome text before the first question. */
@@ -159,13 +181,16 @@ function renderOutline(state) {
   } else {
     const header = element('header');
     header.append(
-      element('div', 'CURRENT QUESTION', 'eyebrow'),
+      renderHistoryNav(state, busy),
       element('h1', state.question),
-      renderMarkdown(state.overview, 'lede'),
+      renderMarkdown(state.answer || '', 'answer'),
     );
     content.append(header);
-    for (const [fileId, steps] of groupByFile(state.steps)) {
-      content.append(renderFile(fileId, steps, state.activeId, busy));
+    let number = 1;
+    for (const { stage, steps } of groupByStage(state.steps)) {
+      const info = stage === undefined ? undefined : state.stages[stage];
+      content.append(renderStage(info, stage, steps, number, state.activeId, busy));
+      number += steps.length;
     }
   }
 
@@ -264,7 +289,6 @@ function receiveState({ data: state }) {
   previousState = fingerprint;
   if (state.question !== previousQuestion) {
     followupDrafts.clear();
-    foldedFiles.clear();
     previousQuestion = state.question;
   }
 

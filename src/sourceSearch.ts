@@ -1,7 +1,9 @@
 import { realpath } from 'node:fs/promises';
 import { isAbsolute, relative, sep } from 'node:path';
 import * as vscode from 'vscode';
+import { findUsage, formatUsage } from './callSites';
 import { hash } from './grounding';
+import type { FileOutline, SymbolRange } from './snap';
 import type { LineSpan, SourceReference } from './walkthrough';
 
 const sourceFiles = '**/*.{c,h,cc,cpp,hpp,cs,css,dart,ex,exs,go,html,java,js,jsx,kt,kts,lua,mjs,cjs,mm,php,py,rb,rs,scala,sh,sql,swift,ts,tsx,vue,svelte,zig}';
@@ -13,6 +15,8 @@ const maxFileBytes = 256 * 1024;
 const maxExcerpts = 16;
 const maxExcerptChars = 30_000;
 const maxLinkedFiles = 6;
+const usageFiles = 3;
+const usageTimeoutMs = 5000;
 
 interface Candidate {
   uri: vscode.Uri;
@@ -25,6 +29,8 @@ interface Candidate {
 export interface SourceExcerpt extends SourceReference {
   suppliedSpan: LineSpan;
   numberedCode: string;
+  /** For the top-ranked files: each definition's range and where it is called from. */
+  usage?: string;
 }
 
 /** Split prose and code identifiers into comparable words such as resetTime → reset, time. */
@@ -259,5 +265,74 @@ export async function discoverSources(question: string, activeUri: vscode.Uri | 
   if (!sources.size) {
     throw new Error('No matching source files found. Try mentioning a function, filename, or feature name from this workspace.');
   }
+  await annotateUsage(sources);
+  if (token.isCancellationRequested) {
+    throw new vscode.CancellationError();
+  }
   return sources;
+}
+
+/**
+ * List where the definitions in the top-ranked files are called from, so the model can tell code the
+ * main flow relies on from internal helpers that merely have suggestive names.
+ */
+async function annotateUsage(sources: Map<string, SourceExcerpt>) {
+  const sourceIds = new Map([...sources].map(([id, source]) => [source.uri, id]));
+  await Promise.all([...sources.values()].slice(0, usageFiles).map(async source => {
+    const usage = await findUsage(vscode.Uri.parse(source.uri), source.suppliedSpan, sourceIds, usageTimeoutMs);
+    if (usage.length) {
+      source.usage = formatUsage(usage);
+    }
+  }));
+}
+
+const definitionKinds = new Set([
+  vscode.SymbolKind.Function, vscode.SymbolKind.Method, vscode.SymbolKind.Constructor,
+  vscode.SymbolKind.Class, vscode.SymbolKind.Struct, vscode.SymbolKind.Interface, vscode.SymbolKind.Enum,
+]);
+
+/** Flatten the language server's definitions into 1-based inclusive ranges. */
+function flattenSymbols(items: readonly (vscode.DocumentSymbol | vscode.SymbolInformation)[], into: SymbolRange[] = []): SymbolRange[] {
+  for (const item of items) {
+    const range = 'location' in item ? item.location.range : item.range;
+    if (definitionKinds.has(item.kind)) {
+      // A range ending at column 0 stops before that line.
+      const endLine = range.end.line + (range.end.character === 0 && range.end.line > range.start.line ? 0 : 1);
+      into.push({ name: item.name, startLine: range.start.line + 1, endLine });
+    }
+    if ('children' in item && item.children) {
+      flattenSymbols(item.children, into);
+    }
+  }
+  return into;
+}
+
+/** Ask the language server for a file's definitions, giving up after a short wait (e.g. while it indexes). */
+async function documentSymbols(uri: vscode.Uri, timeoutMs: number): Promise<SymbolRange[]> {
+  const request = Promise.resolve(vscode.commands.executeCommand<(vscode.DocumentSymbol | vscode.SymbolInformation)[] | undefined>(
+    'vscode.executeDocumentSymbolProvider', uri)).then(items => flattenSymbols(items ?? []), () => []);
+  const timeout = new Promise<SymbolRange[]>(resolve => setTimeout(() => resolve([]), timeoutMs));
+  return Promise.race([request, timeout]);
+}
+
+/**
+ * Read each source's lines and definition ranges so model citations can be corrected. Files that
+ * changed since they were sent to the model are skipped, since their line numbers no longer match.
+ */
+export async function outlineSources(sources: ReadonlyMap<string, SourceReference>, timeoutMs = 4000): Promise<Map<string, FileOutline>> {
+  const outlines = new Map<string, FileOutline>();
+  await Promise.all([...sources].map(async ([id, source]) => {
+    let document: vscode.TextDocument;
+    try {
+      document = await vscode.workspace.openTextDocument(vscode.Uri.parse(source.uri));
+    } catch {
+      return;
+    }
+    if (hash(document.getText()) !== source.digest) {
+      return;
+    }
+    const lines = Array.from({ length: document.lineCount }, (_, index) => document.lineAt(index).text);
+    outlines.set(id, { lines, symbols: await documentSymbols(document.uri, timeoutMs) });
+  }));
+  return outlines;
 }

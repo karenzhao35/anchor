@@ -22,8 +22,48 @@
         "command": "anchor.ask",
         "title": "Ask Question",
         "category": "Anchor"
+      },
+      {
+        "command": "anchor.back",
+        "title": "Previous Question",
+        "category": "Anchor",
+        "icon": "$(arrow-left)",
+        "enablement": "anchor.canGoBack"
+      },
+      {
+        "command": "anchor.forward",
+        "title": "Next Question",
+        "category": "Anchor",
+        "icon": "$(arrow-right)",
+        "enablement": "anchor.canGoForward"
+      },
+      {
+        "command": "anchor.copy",
+        "title": "Copy Response as Markdown",
+        "category": "Anchor",
+        "icon": "$(copy)",
+        "enablement": "anchor.hasWalkthrough"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "anchor.back",
+          "when": "view == anchor.questionOutline && anchor.hasWalkthrough",
+          "group": "navigation@1"
+        },
+        {
+          "command": "anchor.forward",
+          "when": "view == anchor.questionOutline && anchor.hasWalkthrough",
+          "group": "navigation@2"
+        },
+        {
+          "command": "anchor.copy",
+          "when": "view == anchor.questionOutline && anchor.hasWalkthrough",
+          "group": "navigation@3"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
