@@ -1,0 +1,19 @@
+"Measure","Scale","Better","Anchor","Claude Code","Anchor - CC","SD of diff","Anchor better","Tie","CC better"
+"Comprehension score","0-8","higher",4.8,3.6,1.2,0.84,4,1,0
+"Localization (U1)","0-4","higher",2.4,1.4,1,1.41,4,0,1
+"Justification (U2)","0-4","higher",2.4,2.2,0.2,1.64,3,0,2
+"Confidence (mean of 4)","0-5","higher",3.1,2.15,0.95,0.94,3,2,0
+"Survey sum","0-30","higher",23.2,16.4,6.8,1.48,5,0,0
+"Survey S1 (explain to teammate)","0-5","higher",3,2.4,0.6,0.89,2,3,0
+"Survey S2 (know files/functions)","0-5","higher",4,2.6,1.4,0.89,4,1,0
+"Survey S3 (understand why)","0-5","higher",3.4,2,1.4,0.55,5,0,0
+"Survey S4 (know where to debug)","0-5","higher",3.6,2.6,1,0.71,4,1,0
+"Survey S5 (tool helped answer)","0-5","higher",4.6,3.2,1.4,0.55,5,0,0
+"Survey S6 (tool helped understanding)","0-5","higher",4.6,3.6,1,0,5,0,0
+"Raw TLX (PE reversed)","0-10","lower",4.67,5.4,-0.73,1.36,4,1,0
+"TLX Mental demand","0-10","lower",7,8,-1,1.41,4,0,1
+"TLX Physical demand","0-10","lower",0.8,0.8,0,0,0,5,0
+"TLX Temporal demand","0-10","lower",6.4,7.2,-0.8,1.92,2,2,1
+"TLX Performance","0-10","higher",5.2,4,1.2,1.64,2,3,0
+"TLX Effort","0-10","lower",6.6,6.6,0,1.87,1,2,2
+"TLX Frustration","0-10","lower",2.4,3.8,-1.4,2.61,2,3,0
