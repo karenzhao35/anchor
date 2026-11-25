@@ -37,7 +37,7 @@
 | Person | Response | Grade |
 | --- | --- | --- |
 | P1 | It needs to know the interrupted file to continue downloading since you might have given it a different name. It will continue from the current downloaded bytes. | 1 |
-| P2 | The downloader class needs resume = true and a provided name. It requires this to check the progress of the already started download file and see which byte it needs to resume progress from. A httpie generated name is not garuanteed to refer to a file that exists. | 1 *borderline* |
+| P2 | The downloader class needs resume = true and a provided name. It requires this to check the progress of the already started download file and see which byte it needs to resume progress from. A httpie generated name is not garuanteed to refer to a file that exists. | 1 |
 | P4 | It needs the request header in order to resume, and is needed on line 233 when a file is partially downloaded. The code requires to the response to get the headers | 1 |
 | P3 | FYI I used Anchor for this!<br><br>It needs to know the name of the output file and where to resume from/what content range still needs to be parsed. httpie picks out a name for itself by calling get_unique_name which creates a new name that is unique in the file system, so it won't be able to append the interrupted download to that original output file. | 2 |
 | P5 | downloader.status.total_size and downloader.status.downloaded to make error message. | 0 |
@@ -72,7 +72,7 @@
 | P2 | Bounded by bound host, prevents abuse of auth cookies for access control | 2 |
 | P4 | Session,load()'s token is based off of the user's login URL, which prevents concurrency issues. | 1 |
 | P3 | It keeps it apart by storing the session state under different directories for different hosts. This prevents sharing authorizations and cookies on different hosts which could be insecure. | 2 |
-| P5 | I think they get separated by the property materialized_cookie['domain'] | 1 *borderline* |
+| P5 | I think they get separated by the property materialized_cookie['domain'] | 1  |
 
 **u2b: command line wins, then persists**
 
@@ -81,5 +81,5 @@
 | P1 | new headers take priority over old ones. since the session already exists the update session fn is called which adds the new one. | 2 |
 | P2 | Every time a request is sent, a session file is created or updated, and then it is loaded for the request to be sent. | 1 |
 | P4 | at some point in the session the header with Token: old would have been stored, the session would load the old token as it is being sent. The data is processed with certain headers being ignored, and then header is updated with the new token | 1 |
-| P3 | There is a save() method in a file (I forgot which file) that saves the state of the session to disk. Then there is a method get_httpie_session() that fetches that saved session from disk. It then uses the old state and replaces the X-Token with the new value from the command line before making the request (somewhere, I'm not sure where the caller of get_httpie_session() is) | 1 *borderline* |
+| P3 | There is a save() method in a file (I forgot which file) that saves the state of the session to disk. Then there is a method get_httpie_session() that fetches that saved session from disk. It then uses the old state and replaces the X-Token with the new value from the command line before making the request (somewhere, I'm not sure where the caller of get_httpie_session() is) | 1 |
 | P5 | update_headers in sessions.py gets new keys/headers and overrides them when possible. | 1 |
